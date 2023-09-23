@@ -2,59 +2,66 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
 
-	"golang.org/x/net/html"
+	"github.com/go-rod/rod"
 )
 
 func main() {
-	_, err := crawl("https://airtable.com/appoPqE4I6DudZGIe/shr3aL7FonYv3m1b2/tblO7PpHl1a0mFxD4")
-	if err != nil {
-		log.Fatalf("could not crawl the url: %v", err)
+	cats := crawl("https://airtable.com/appoPqE4I6DudZGIe/shr3aL7FonYv3m1b2/tblO7PpHl1a0mFxD4")
+	
+	for _, cat := range cats {
+		printCat(cat)
+		fmt.Println()
 	}
+	fmt.Printf("Found %d cats\n", len(cats))
 }
 
-type record struct {
+type cat struct {
 	name         string
 	pics         []string
 	adoptionLink string
 }
 
-func crawl(url string) ([]record, error) {
-	// get the html of webpage
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("error: could not Get: %v", err)
-	}
-	defer resp.Body.Close()
+func crawl(url string) []cat {
+	// Launch a new browser with default options, and connect to it
+	browser := rod.New().MustConnect()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: Status code %d", resp.StatusCode)
+	// Close it after main process ends
+	defer browser.Close()
 
-	}
+	// Create a new page
+	page := browser.MustPage(url).MustWaitStable()
 
-	doc, err := html.Parse(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse html: %v", err)
-	}
-	// go through each element in DOM
-	var f func(*html.Node)
-	f = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			for _, a := range n.Attr {
-				if a.Key == "href" {
-					fmt.Println(a.Val)
-					break
-				}
-			}
+	// Zoom out to get more cats
+	page.MustEval(`() => document.body.style.zoom = "10%"`)
+	page.MustWaitStable()
+
+	cats := []cat{}
+
+	catDivs := page.MustElements("div.baymaxGalleryCard");
+	for _, catDiv := range catDivs {	
+		nameA := catDiv.MustElement("a.galleryCardPrimaryCell")
+		name := nameA.MustText()
+		adoptionLink := nameA.MustProperty("href").String()
+		
+		pics := []string{}
+		for _, image := range catDiv.MustElements(".coverAttachmentCell link") {
+			pics = append(pics, image.MustProperty("href").String())
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c)
-		}
+		
+		cats = append(cats, cat{name, pics, adoptionLink})
 	}
-	f(doc)
+	
+	return cats;
+}
 
-	return nil, nil
-	// look up the element
+
+func printCat(cat cat) {
+	fmt.Printf("Name: %s\n", cat.name)
+	fmt.Printf("Link: %s\n", cat.adoptionLink)
+	
+	fmt.Println("Pics:")
+	for _, pic := range cat.pics {
+		fmt.Println(pic)
+	}
 }
