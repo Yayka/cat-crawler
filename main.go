@@ -25,8 +25,6 @@ type cat struct {
 func crawl(url string) []cat {
 	// Launch a new browser with default options, and connect to it
 	browser := rod.New().MustConnect()
-
-	// Close it after main process ends
 	defer browser.Close()
 
 	// Create a new page
